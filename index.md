@@ -19,4 +19,4 @@ _"The Magic 8-Ball is a plastic sphere, made to look like an eight-ball, that is
 
 
 ### Contact
-If you have any questions or requests please send an email to: pturczyk@gmail.com
+If you have any questions or requests please send an email to: [pturczyk@gmail.com](mailto:pturczyk@gmail.com)
