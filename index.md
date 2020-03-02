@@ -12,6 +12,8 @@ _"The Magic 8-Ball is a plastic sphere, made to look like an eight-ball, that is
 ```
 /ask <any question that is bothering you>
 ```
+... and await the reply from the great oracle!
+
 [](#example-usage)
 ### Example usage
 
