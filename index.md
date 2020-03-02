@@ -24,4 +24,4 @@ No information about your usage of this site is shared with anyone else. This si
 
 [](#support)
 ### Support
-If you have any questions, requests or problems please send an email to: [pturczyk@gmail.com](mailto:pturczyk@gmail.com)
+If you have any questions, requests or problems please send an email to: [support@pturczyk.pl](mailto:support@pturczyk.pl)
