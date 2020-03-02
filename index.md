@@ -17,3 +17,6 @@ _"The Magic 8-Ball is a plastic sphere, made to look like an eight-ball, that is
 
 ![Screen](https://raw.githubusercontent.com/pturczyk/assets/eightball/imgs/screen.png)
 
+
+### Contact
+If you have any questions or requests please send an email to: pturczyk@gmail.com
