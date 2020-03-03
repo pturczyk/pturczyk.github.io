@@ -23,7 +23,7 @@ Write in slack the /ask slash command followed by the question
 [](#privacy)
 ### Privacy
 
-No information about your usage of this site is shared with anyone else. This site doesn't intentionally collect personally identifiable information of any kind.
+No information about your usage of this site and/or slack application is shared with anyone else. This site/slack application doesn't intentionally collect personally identifiable information of any kind. The only information that is collected are technical information related to the sent Magic 8-Ball request and retained up to 7 days for troubleshooting purposes.
 
 [](#support)
 ### Support
