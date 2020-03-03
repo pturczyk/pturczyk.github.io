@@ -1,7 +1,11 @@
 ### Installation succeeded
 
 ✅ Magic 8-Ball was successfully installed to your slack workspace 
-
+<br/>
+<br/>
+<br/>
+<br/>
+<br/>
 [](#how-to-use-it)
 ### How to use the Magic 8-Ball
 
