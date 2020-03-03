@@ -9,7 +9,7 @@ _"The Magic 8-Ball is a plastic sphere, made to look like an eight-ball, that is
 [](#how-to-use-it)
 ### How to use the Magic 8-Ball
 
-Write in slack the following slash command followed by the question
+Write in slack the /ask slash command followed by the question
 ```
 /ask <any question that is bothering you>
 ```
