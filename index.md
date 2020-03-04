@@ -1,4 +1,4 @@
-<a href="https://slack.com/oauth/v2/authorize?client_id=962873913474.963386515618&scope=commands" rel="Add to slack">![Add to Slack](https://platform.slack-edge.com/img/add_to_slack.png)</a>
+<a href="https://slack.com/oauth/v2/authorize?client_id=962873913474.963386515618&scope=commands" rel="Add to Slack">![Add to Slack](https://platform.slack-edge.com/img/add_to_slack.png)</a>
 
 [](#what-is-it)
 ### What Is the Magic 8-Ball
@@ -9,7 +9,7 @@ _"The Magic 8-Ball is a plastic sphere, made to look like an eight-ball, that is
 [](#how-to-use-it)
 ### How to use the Magic 8-Ball
 
-Write in slack the /ask slash command followed by the question
+Write in Slack the /ask slash command followed by the question
 ```
 /ask <any question that is bothering you>
 ```
@@ -23,7 +23,7 @@ Write in slack the /ask slash command followed by the question
 [](#privacy)
 ### Privacy
 
-No information about your usage of this site and/or slack application is shared with anyone else. This site/slack application doesn't intentionally collect personally identifiable information of any kind. The only information that is collected are technical information related to the sent Magic 8-Ball request and retained up to 7 days for troubleshooting purposes.
+No information about your usage of this site and/or Slack application is shared with anyone else. This site/lack application doesn't intentionally collect personally identifiable information of any kind. The only information that is collected are technical information related to the sent Magic 8-Ball request and retained up to 7 days for troubleshooting purposes.
 
 [](#support)
 ### Support
