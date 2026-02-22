@@ -700,6 +700,8 @@
         let trees = [];
         let passingAnimals = []; // Zwierzęta które mijają
         let dialogBubbles = []; // Chmurki dialogowe
+        let fartClouds = []; // Chmurki pierdzenia
+        let fartCooldown = 0; // Cooldown żeby nie spamować
         const chunkSize = 1000;
         let generatedChunks = new Set();
         let furthestPosition = 0;
@@ -929,6 +931,314 @@
                     sound.play().catch(() => {});
                 }
             } catch (e) { /* ignore sound errors */ }
+        }
+
+        function playFartSound() {
+            try {
+                if (audioContext.state === 'suspended') audioContext.resume();
+                const osc = audioContext.createOscillator();
+                const gain = audioContext.createGain();
+                const now = audioContext.currentTime;
+
+                osc.type = 'sawtooth';
+                osc.frequency.setValueAtTime(120, now);
+                osc.frequency.linearRampToValueAtTime(60, now + 0.15);
+                osc.frequency.linearRampToValueAtTime(40, now + 0.4);
+
+                gain.gain.setValueAtTime(0.3, now);
+                gain.gain.linearRampToValueAtTime(0.15, now + 0.2);
+                gain.gain.linearRampToValueAtTime(0, now + 0.5);
+
+                // Add some noise for realism
+                const noise = audioContext.createOscillator();
+                const noiseGain = audioContext.createGain();
+                noise.type = 'triangle';
+                noise.frequency.setValueAtTime(80, now);
+                noise.frequency.linearRampToValueAtTime(30, now + 0.3);
+                noiseGain.gain.setValueAtTime(0.15, now);
+                noiseGain.gain.linearRampToValueAtTime(0, now + 0.4);
+                noise.connect(noiseGain);
+                noiseGain.connect(audioContext.destination);
+                noise.start(now);
+                noise.stop(now + 0.5);
+
+                osc.connect(gain);
+                gain.connect(audioContext.destination);
+                osc.start(now);
+                osc.stop(now + 0.5);
+            } catch (e) { /* ignore */ }
+        }
+
+        function doFart() {
+            if (fartCooldown > 0) return;
+            const fartAllowedStates = ['world', 'interior', 'shop', 'hairdresser', 'hospital', 'playground'];
+            if (!fartAllowedStates.includes(gameState)) return;
+            fartCooldown = 40; // ~0.67s cooldown
+
+            playFartSound();
+
+            // Determine player position based on state
+            let fartX, fartY, facingRight;
+            if (gameState === 'world') {
+                fartX = player.x;
+                fartY = player.y;
+                facingRight = player.facingRight;
+            } else if (gameState === 'shop') {
+                fartX = shopState.playerX;
+                fartY = shopState.playerY;
+                facingRight = player.facingRight;
+            } else if (gameState === 'hairdresser') {
+                fartX = hairdresserState.playerX;
+                fartY = hairdresserState.playerY;
+                facingRight = player.facingRight;
+            } else if (gameState === 'hospital') {
+                fartX = hospitalState.playerX;
+                fartY = hospitalState.playerY;
+                facingRight = player.facingRight;
+            } else if (gameState === 'playground') {
+                fartX = playgroundState.playerX;
+                fartY = playgroundState.playerY;
+                facingRight = player.facingRight;
+            } else {
+                // Interior
+                fartX = interiorPlayer.x;
+                fartY = interiorPlayer.y;
+                facingRight = player.facingRight;
+            }
+
+            // Spawn fart cloud behind player (behind the tail)
+            const tailOffsetX = facingRight ? -25 : 25;
+            const isScreenCoords = gameState !== 'world';
+            for (let i = 0; i < 5; i++) {
+                fartClouds.push({
+                    x: fartX + tailOffsetX + (Math.random() - 0.5) * 15,
+                    y: fartY + 10 + (Math.random() - 0.5) * 10,
+                    size: 8 + Math.random() * 12,
+                    alpha: 0.7 + Math.random() * 0.3,
+                    vx: (facingRight ? -1 : 1) * (0.3 + Math.random() * 0.5),
+                    vy: -(0.5 + Math.random() * 1.0),
+                    life: 90 + Math.random() * 40, // ~1.5-2s
+                    maxLife: 0,
+                    screenCoords: isScreenCoords // flag: don't subtract worldOffset
+                });
+                fartClouds[fartClouds.length - 1].maxLife = fartClouds[fartClouds.length - 1].life;
+            }
+
+            // Make nearby unfound friends panic and flee (only in world)
+            if (gameState === 'world') {
+                friendsToFind.forEach(friend => {
+                    if (friend.found) return;
+                    const dist = Math.abs(player.x - friend.x);
+                    if (dist < 500) {
+                        // Flee away from player
+                        const fleeDir = friend.x > player.x ? 1 : -1;
+                        friend.panicFlee = {
+                            dir: fleeDir,
+                            speed: 5 + Math.random() * 3,
+                            timer: 120 + Math.random() * 60, // 2-3s of fleeing
+                            originalX: friend.x
+                        };
+                    }
+                });
+
+                // Also scare passing animals
+                passingAnimals.forEach(animal => {
+                    const animalScreenX = animal.x;
+                    const playerScreenX = player.x - worldOffset;
+                    if (Math.abs(playerScreenX - animalScreenX) < 250) {
+                        animal.scared = true;
+                        animal.scaredTimer = 120;
+                        animal.scaredDir = animalScreenX > playerScreenX ? 1 : -1;
+                    }
+                });
+
+                // Scare following friends (they react in panic but stay following)
+                followingFriends.forEach(friend => {
+                    friend.fartPanic = {
+                        timer: 90,
+                        jumpOffset: 0,
+                        jumpVel: -6
+                    };
+                });
+            }
+
+            // Scare interior friends (in house and other buildings)
+            if (gameState === 'interior') {
+                interiorFriends.forEach(friend => {
+                    if (friend.activity === 'p2_controlled') return;
+                    const dist = Math.abs(interiorPlayer.x - friend.x);
+                    if (dist < 400) {
+                        const fleeDir = friend.x > interiorPlayer.x ? 1 : -1;
+                        friend.fartPanic = {
+                            dir: fleeDir,
+                            speed: 4 + Math.random() * 3,
+                            timer: 90 + Math.random() * 40,
+                            originalX: friend.x,
+                            originalActivity: friend.activity
+                        };
+                        friend.activity = 'fart_fleeing';
+                    }
+                });
+            }
+        }
+
+        function updateFartClouds() {
+            if (fartCooldown > 0) fartCooldown--;
+
+            fartClouds = fartClouds.filter(cloud => cloud.life > 0);
+            fartClouds.forEach(cloud => {
+                cloud.x += cloud.vx;
+                cloud.y += cloud.vy;
+                cloud.vy *= 0.99; // slow down rise
+                cloud.size += 0.15; // expand
+                cloud.alpha = (cloud.life / cloud.maxLife) * 0.7;
+                cloud.life--;
+            });
+
+            // Update friend panic fleeing (unfound friends in world)
+            friendsToFind.forEach(friend => {
+                if (!friend.panicFlee) return;
+                const pf = friend.panicFlee;
+                if (pf.timer > 0) {
+                    friend.x += pf.dir * pf.speed;
+                    pf.timer--;
+                } else {
+                    // Slowly return
+                    const dx = pf.originalX - friend.x;
+                    if (Math.abs(dx) > 2) {
+                        friend.x += Math.sign(dx) * 1.5;
+                    } else {
+                        friend.panicFlee = null;
+                    }
+                }
+            });
+
+            // Update following friends panic (jump reaction)
+            followingFriends.forEach(friend => {
+                if (!friend.fartPanic) return;
+                const fp = friend.fartPanic;
+                fp.timer--;
+                fp.jumpOffset += fp.jumpVel;
+                fp.jumpVel += 0.5; // gravity
+                if (fp.jumpOffset > 0) {
+                    fp.jumpOffset = 0;
+                    fp.jumpVel = -4 - Math.random() * 2; // bounce again
+                }
+                if (fp.timer <= 0) {
+                    friend.fartPanic = null;
+                }
+            });
+
+            // Update interior friends fart fleeing
+            interiorFriends.forEach(friend => {
+                if (friend.activity !== 'fart_fleeing' || !friend.fartPanic) return;
+                const fp = friend.fartPanic;
+                if (fp.timer > 0) {
+                    friend.x += fp.dir * fp.speed;
+                    friend.x = Math.max(30, Math.min(canvas.width - 30, friend.x));
+                    fp.timer--;
+                } else {
+                    // Return to original position
+                    const dx = fp.originalX - friend.x;
+                    if (Math.abs(dx) > 2) {
+                        friend.x += Math.sign(dx) * 2;
+                    } else {
+                        friend.x = fp.originalX;
+                        friend.activity = fp.originalActivity;
+                        friend.fartPanic = null;
+                    }
+                }
+            });
+        }
+
+        function drawFartClouds() {
+            fartClouds.forEach(cloud => {
+                const screenX = cloud.screenCoords ? cloud.x : (cloud.x - worldOffset);
+                if (screenX < -50 || screenX > canvas.width + 50) return;
+
+                ctx.save();
+                ctx.globalAlpha = cloud.alpha;
+
+                // Green stinky cloud
+                const grad = ctx.createRadialGradient(screenX, cloud.y, 0, screenX, cloud.y, cloud.size);
+                grad.addColorStop(0, 'rgba(100, 180, 50, 0.6)');
+                grad.addColorStop(0.5, 'rgba(120, 200, 60, 0.3)');
+                grad.addColorStop(1, 'rgba(140, 220, 70, 0)');
+                ctx.fillStyle = grad;
+                ctx.beginPath();
+                ctx.arc(screenX, cloud.y, cloud.size, 0, Math.PI * 2);
+                ctx.fill();
+
+                // Stink lines
+                if (cloud.life > 30) {
+                    ctx.strokeStyle = 'rgba(100, 160, 40, ' + (cloud.alpha * 0.5) + ')';
+                    ctx.lineWidth = 1;
+                    for (let s = 0; s < 3; s++) {
+                        const sx = screenX + (s - 1) * cloud.size * 0.4;
+                        const waveOffset = (cloud.maxLife - cloud.life) * 0.1 + s;
+                        ctx.beginPath();
+                        ctx.moveTo(sx, cloud.y);
+                        ctx.quadraticCurveTo(
+                            sx + Math.sin(waveOffset) * 4,
+                            cloud.y - cloud.size * 0.5,
+                            sx + Math.sin(waveOffset + 1) * 3,
+                            cloud.y - cloud.size
+                        );
+                        ctx.stroke();
+                    }
+                }
+
+                ctx.restore();
+            });
+
+            // Draw panic indicators on fleeing friends
+            friendsToFind.forEach(friend => {
+                if (!friend.panicFlee || friend.found) return;
+                if (friend.panicFlee.timer <= 0) return;
+                const screenX = friend.x - worldOffset;
+                if (screenX < -100 || screenX > canvas.width + 100) return;
+
+                // Green stink cloud around friend
+                ctx.save();
+                ctx.globalAlpha = 0.3;
+                const stinkGrad = ctx.createRadialGradient(screenX, friend.y, 0, screenX, friend.y, 40);
+                stinkGrad.addColorStop(0, 'rgba(100, 180, 50, 0.4)');
+                stinkGrad.addColorStop(1, 'rgba(100, 180, 50, 0)');
+                ctx.fillStyle = stinkGrad;
+                ctx.beginPath();
+                ctx.arc(screenX, friend.y, 40, 0, Math.PI * 2);
+                ctx.fill();
+                ctx.restore();
+
+                // Panic emoji - big and bouncing
+                const bounce = Math.sin(Date.now() / 80) * 5;
+                ctx.font = 'bold 28px Comic Sans MS';
+                ctx.textAlign = 'center';
+                ctx.fillText('😱', screenX, friend.y - 40 + bounce);
+
+                // Sweat drops
+                ctx.fillStyle = 'rgba(100, 180, 230, 0.8)';
+                const dropOff = (Date.now() / 100) % 20;
+                ctx.beginPath();
+                ctx.ellipse(screenX + 18, friend.y - 15 + dropOff, 3, 5, 0, 0, Math.PI * 2);
+                ctx.fill();
+                ctx.beginPath();
+                ctx.ellipse(screenX - 15, friend.y - 10 + dropOff * 0.7, 3, 5, 0, 0, Math.PI * 2);
+                ctx.fill();
+
+                // Speed lines behind the friend (showing movement)
+                const dir = friend.panicFlee.dir;
+                ctx.strokeStyle = 'rgba(200, 200, 200, 0.6)';
+                ctx.lineWidth = 2;
+                for (let i = 0; i < 4; i++) {
+                    const lx = screenX - dir * (20 + i * 12);
+                    const ly = friend.y - 5 + i * 10;
+                    ctx.beginPath();
+                    ctx.moveTo(lx, ly);
+                    ctx.lineTo(lx - dir * 20, ly);
+                    ctx.stroke();
+                }
+            });
         }
 
         // Muzyka w tle
@@ -1193,6 +1503,8 @@
             trees = [];
             passingAnimals = [];
             dialogBubbles = [];
+            fartClouds = [];
+            fartCooldown = 0;
             itemsToCollect = [];
             kindergartens = [];
             offices = [];
@@ -4331,12 +4643,42 @@
                 }
 
                 ctx.restore();
+
+                // Scared indicator when fleeing from fart
+                if (animal.scared && animal.scaredTimer > 0) {
+                    const bounce = Math.sin(Date.now() / 80) * 4;
+                    ctx.font = 'bold 22px Comic Sans MS';
+                    ctx.textAlign = 'center';
+                    ctx.fillText('😱', screenX, displayY - 30 + bounce);
+                    // Speed lines
+                    ctx.strokeStyle = 'rgba(200, 200, 200, 0.5)';
+                    ctx.lineWidth = 2;
+                    const sDir = animal.scaredDir;
+                    for (let sl = 0; sl < 3; sl++) {
+                        const lx = screenX - sDir * (15 + sl * 10);
+                        const ly = displayY - 5 + sl * 8;
+                        ctx.beginPath();
+                        ctx.moveTo(lx, ly);
+                        ctx.lineTo(lx - sDir * 15, ly);
+                        ctx.stroke();
+                    }
+                }
             });
         }
 
         // Aktualizacja zwierząt mijających
         function updatePassingAnimals() {
             passingAnimals.forEach(animal => {
+                // Scared by fart - run fast!
+                if (animal.scared && animal.scaredTimer > 0) {
+                    animal.x += animal.scaredDir * 5;
+                    animal.scaredTimer--;
+                    if (animal.scaredTimer <= 0) {
+                        animal.scared = false;
+                    }
+                    return;
+                }
+
                 animal.x += animal.speed * animal.direction;
 
                 // Odbicie od granic
@@ -4356,7 +4698,29 @@
                 if (histIdx < playerHistory.length) {
                     const pos = playerHistory[histIdx];
                     if (pos) {
-                        drawFriend(friend.type, pos.x - worldOffset - 30, pos.y - 10, 0.9);
+                        const sx = pos.x - worldOffset - 30;
+                        const sy = pos.y - 10;
+                        const panicY = friend.fartPanic ? friend.fartPanic.jumpOffset : 0;
+                        drawFriend(friend.type, sx, sy + panicY, 0.9);
+
+                        // Panic indicators
+                        if (friend.fartPanic && friend.fartPanic.timer > 0) {
+                            const bounce = Math.sin(Date.now() / 80) * 4;
+                            ctx.font = 'bold 24px Comic Sans MS';
+                            ctx.textAlign = 'center';
+                            ctx.fillText('😱', sx, sy + panicY - 35 + bounce);
+                            // Green stink around
+                            ctx.save();
+                            ctx.globalAlpha = 0.25;
+                            const sg = ctx.createRadialGradient(sx, sy + panicY, 0, sx, sy + panicY, 35);
+                            sg.addColorStop(0, 'rgba(100, 180, 50, 0.4)');
+                            sg.addColorStop(1, 'rgba(100, 180, 50, 0)');
+                            ctx.fillStyle = sg;
+                            ctx.beginPath();
+                            ctx.arc(sx, sy + panicY, 35, 0, Math.PI * 2);
+                            ctx.fill();
+                            ctx.restore();
+                        }
                     }
                 }
                 drawIndex++;
@@ -15251,17 +15615,27 @@
             } else if (gameState === 'shop') {
                 updateShop();
                 drawShop();
+                updateFartClouds();
+                drawFartClouds();
             } else if (gameState === 'hairdresser') {
                 updateHairdresser();
                 drawHairdresser();
+                updateFartClouds();
+                drawFartClouds();
             } else if (gameState === 'hospital') {
                 updateHospital();
                 drawHospital();
+                updateFartClouds();
+                drawFartClouds();
             } else if (gameState === 'playground') {
                 updatePlayground();
                 drawPlayground();
+                updateFartClouds();
+                drawFartClouds();
             } else if (gameState === 'interior') {
                 drawInterior();
+                updateFartClouds();
+                drawFartClouds();
             } else if (gameState === 'battle') {
                 drawBattle();
             } else {
@@ -15388,6 +15762,10 @@
                     ctx.fillText('P2: ' + player2.selectedType.name + ' (WASD+E)', hudX + 10, hudY + 20);
                     ctx.restore();
                 }
+
+                // Fart clouds (behind rain, over everything else)
+                updateFartClouds();
+                drawFartClouds();
 
                 // Rain (drawn over everything)
                 drawRain();
@@ -15612,6 +15990,11 @@
         window.addEventListener('keydown', (e) => {
             keys[e.key] = true;
             if (e.key === ' ' || e.key === 'ArrowUp') e.preventDefault();
+
+            // Fart on Enter
+            if (e.key === 'Enter' && ['world', 'interior', 'shop', 'hairdresser', 'hospital', 'playground'].includes(gameState)) {
+                doFart();
+            }
 
             // Kindergarten board navigation
             if (gameState === 'kindergarten') {
